@@ -4,9 +4,10 @@ import time
 from urllib.parse import urljoin, urlparse
 
 class Crawler:
-    def __init__(self, base_url, politeness_window=6):
+    def __init__(self, base_url, politeness_window=6, timeout=10):
         self.base_url = base_url
         self.politeness_window = politeness_window
+        self.timeout = timeout
         self.visited = set()
         self.pages = []  # List of dicts: {'url': url, 'content': html}
 
@@ -29,7 +30,7 @@ class Crawler:
                 
             print(f"Crawling: {url}")
             try:
-                response = requests.get(url)
+                response = requests.get(url, timeout=self.timeout)
                 response.raise_for_status()
                 
                 self.visited.add(url)
