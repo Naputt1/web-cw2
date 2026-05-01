@@ -18,6 +18,9 @@ class Indexer:
                 os.makedirs(db_dir, exist_ok=True)
             
         self.conn = sqlite3.connect(self.db_path)
+        if self.conn is None:
+            raise sqlite3.Error("Failed to connect to database.")
+            
         self.conn.row_factory = sqlite3.Row
         cursor = self.conn.cursor()
         
@@ -46,7 +49,8 @@ class Indexer:
                 FOREIGN KEY (page_id) REFERENCES pages(id)
             )
         ''')
-        self.conn.commit()
+        if self.conn:
+            self.conn.commit()
 
     def clean_text(self, text):
         """Remove non-alphanumeric characters and convert to lowercase."""
@@ -78,6 +82,9 @@ class Indexer:
             page_index[word]['frequency'] += 1
             page_index[word]['positions'].append(position)
             
+        if self.conn is None:
+            return
+            
         cursor = self.conn.cursor()
         
         # Get or create page_id
@@ -98,7 +105,8 @@ class Indexer:
                 VALUES (?, ?, ?, ?)
             ''', (word_id, page_id, stats['frequency'], positions_str))
             
-        self.conn.commit()
+        if self.conn:
+            self.conn.commit()
 
     def save_index(self, filepath):
         """Save the inverted index (already handled by SQLite commit, but kept for compatibility)."""
