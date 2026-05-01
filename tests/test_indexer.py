@@ -62,3 +62,20 @@ def test_load_index(tmp_path):
     cursor = new_indexer.conn.cursor()
     cursor.execute('SELECT url FROM pages')
     assert cursor.fetchone()['url'] == "url1"
+
+    # Non-existent file
+    assert new_indexer.load_index("nonexistent.db") is False
+
+def test_indexer_directory_creation(tmp_path):
+    # Test that indexer creates parent directory if it doesn't exist
+    new_dir = tmp_path / "new_subdir"
+    db_path = str(new_dir / "index.db")
+    Indexer(db_path)
+    assert os.path.exists(db_path)
+
+def test_indexer_no_content(indexer):
+    # Test indexing a page with no valid tokens
+    indexer.add_page("http://empty.com", "<html><body></body></html>")
+    cursor = indexer.conn.cursor()
+    cursor.execute("SELECT COUNT(*) as count FROM pages")
+    assert cursor.fetchone()['count'] == 0

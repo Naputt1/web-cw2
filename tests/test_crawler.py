@@ -37,9 +37,21 @@ def test_crawler_basic(mock_sleep, mock_get):
     assert "https://quotes.toscrape.com/" in urls
     assert any("page1" in u for u in urls)
 
+@patch('requests.get')
+@patch('time.sleep', return_value=None)
+def test_crawler_error_handling(mock_sleep, mock_get):
+    # Test that crawler handles RequestException without crashing
+    import requests
+    mock_get.side_effect = requests.RequestException("Network Error")
+    crawler = Crawler("https://error.com")
+    pages = crawler.crawl()
+    assert pages == []
+
 def test_is_valid_url():
     crawler = Crawler("https://quotes.toscrape.com/")
     assert crawler.is_valid_url("https://quotes.toscrape.com/tag/life/") is True
     assert crawler.is_valid_url("https://google.com") is False
     # Relative paths
     assert crawler.is_valid_url("/page1") is True
+    # Fragment normalization
+    assert crawler.is_valid_url("https://quotes.toscrape.com/#fragment") is True

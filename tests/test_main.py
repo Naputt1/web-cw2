@@ -73,3 +73,14 @@ def test_build_command(shell_setup):
         
     assert mock_indexer.add_page.called
     assert "url1" in mock_indexer.add_page.call_args[0]
+
+def test_exit_command(shell_setup):
+    shell, mock_indexer, _ = shell_setup
+    assert shell.do_exit("") is True
+    assert mock_indexer.close.called
+
+def test_eof_command(shell_setup):
+    shell, mock_indexer, _ = shell_setup
+    with patch('builtins.print'):
+        assert shell.do_EOF("") is True
+    assert mock_indexer.close.called

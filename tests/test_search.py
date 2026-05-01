@@ -1,6 +1,8 @@
 import pytest
-import sys
+from unittest.mock import patch
 import os
+import sys
+import sqlite3
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 from indexer import Indexer
 from search import SearchEngine
@@ -65,6 +67,13 @@ def test_find_case_insensitivity(searcher):
 def test_find_empty_query(searcher):
     assert searcher.find("") == []
     assert searcher.find("   ") == []
+
+def test_find_db_error(searcher):
+    # Mocking a database error during search
+    with patch('sqlite3.connect') as mock_connect:
+        mock_connect.side_effect = sqlite3.Error("Mock DB Error")
+        results = searcher.find("hello")
+        assert results == []
 
 def test_find_no_results(searcher):
     results = searcher.find("missing")

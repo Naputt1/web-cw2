@@ -1,7 +1,7 @@
 import sqlite3
 import math
 import logging
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from utils import stem
 
 logger = logging.getLogger(__name__)
@@ -63,10 +63,11 @@ class SearchEngine:
         if not ranking_terms:
             return []
 
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        
+        conn: Optional[sqlite3.Connection] = None
         try:
+            conn = self._get_connection()
+            cursor = conn.cursor()
+            
             # 1. Retrieve global document count
             cursor.execute('SELECT value FROM metadata WHERE key = "total_documents"')
             n_docs_row = cursor.fetchone()
@@ -108,7 +109,8 @@ class SearchEngine:
             logger.error(f"Database error during search: {e}")
             return []
         finally:
-            conn.close()
+            if conn:
+                conn.close()
 
     def _build_candidate_query(self, must: List[str], exclude: List[str], should: List[str]) -> Tuple[str, List]:
         """Constructs the SQL to filter documents based on boolean constraints."""
