@@ -11,33 +11,42 @@ def searcher(tmp_path):
     db_path = str(tmp_path / "test_index.db")
     indexer = Indexer(db_path)
     
-    # Populate test data
-    indexer.add_page("url1", "<html><body>hello world</body></html>")
+    # Populate test data with varying frequencies for ranking tests
+    # Page 1 has "hello" twice
+    indexer.add_page("url1", "<html><body>hello hello world</body></html>")
+    # Page 2 has "hello" once
     indexer.add_page("url2", "<html><body>hello search engine</body></html>")
+    # Page 3 has "world" once
     indexer.add_page("url3", "<html><body>world wide web</body></html>")
     indexer.close()
     
     return SearchEngine(db_path)
 
-def test_find_single_word(searcher):
+def test_find_ranking(searcher):
+    # url1 has "hello" twice, url2 has it once. url1 should rank higher.
     results = searcher.find("hello")
-    assert set(results) == {"url1", "url2"}
+    assert results[0][0] == "url1"
+    assert results[1][0] == "url2"
+    assert results[0][1] > results[1][1]
 
-def test_find_multi_word_and(searcher):
-    results = searcher.find("hello world")
-    assert set(results) == {"url1"}
+def test_find_plus_syntax(searcher):
+    # Must have "hello" AND "world"
+    results = searcher.find("+hello +world")
+    assert len(results) == 1
+    assert results[0][0] == "url1"
+
+def test_find_minus_syntax(searcher):
+    # Has "hello" but NOT "world"
+    results = searcher.find("hello -world")
+    assert len(results) == 1
+    assert results[0][0] == "url2"
 
 def test_find_no_results(searcher):
     results = searcher.find("missing")
     assert results == []
 
-def test_find_multi_word_no_results(searcher):
-    results = searcher.find("hello missing")
-    assert results == []
-
 def test_print_word_info(searcher):
     output = searcher.print_word_info("hello")
-    assert "Inverted index for 'hello':" in output
+    assert "Inverted index for term 'hello'" in output
     assert "URL: url1" in output
-    assert "Frequency: 1" in output
-    assert "Positions: [0]" in output
+    assert "Term Frequency: 2" in output

@@ -1,43 +1,61 @@
 import sqlite3
-import re
-from bs4 import BeautifulSoup
+import logging
 import os
+from bs4 import BeautifulSoup
+from typing import Optional, Dict
+from utils import clean_and_tokenize
+
+logger = logging.getLogger(__name__)
 
 class Indexer:
-    def __init__(self, db_path=":memory:"):
+    """
+    Manages the creation and persistence of a SQLite-based inverted index.
+    
+    This implementation tracks Term Frequency (TF) and Document Frequency (DF)
+    to support relevance ranking via TF-IDF.
+    """
+    
+    def __init__(self, db_path: str = ":memory:"):
+        """
+        Initializes the indexer with a database path.
+        
+        Args:
+            db_path: Path to the SQLite file. Defaults to ":memory:".
+        """
         self.db_path = db_path
-        self.conn = None
+        self.conn: Optional[sqlite3.Connection] = None
         self._initialize_db()
 
-    def _initialize_db(self):
-        """Create tables if they don't exist."""
-        # Ensure directory exists if not in memory
+    def _initialize_db(self) -> None:
+        """Sets up the SQLite schema for the inverted index and metadata."""
         if self.db_path != ":memory:":
             db_dir = os.path.dirname(os.path.abspath(self.db_path))
             if db_dir:
                 os.makedirs(db_dir, exist_ok=True)
             
         self.conn = sqlite3.connect(self.db_path)
-        if self.conn is None:
-            raise sqlite3.Error("Failed to connect to database.")
-            
         self.conn.row_factory = sqlite3.Row
         cursor = self.conn.cursor()
         
+        # words: stores unique terms and their global document frequency
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS words (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                word TEXT UNIQUE
+                word TEXT UNIQUE,
+                df INTEGER DEFAULT 0
             )
         ''')
         
+        # pages: stores crawled URLs and their total word counts
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS pages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                url TEXT UNIQUE
+                url TEXT UNIQUE,
+                total_words INTEGER DEFAULT 0
             )
         ''')
         
+        # occurrences: mapping between words and pages with local statistics
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS occurrences (
                 word_id INTEGER,
@@ -49,73 +67,89 @@ class Indexer:
                 FOREIGN KEY (page_id) REFERENCES pages(id)
             )
         ''')
-        if self.conn:
-            self.conn.commit()
+        
+        # metadata: tracks global statistics like total document count
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS metadata (
+                key TEXT PRIMARY KEY,
+                value INTEGER
+            )
+        ''')
+        cursor.execute('INSERT OR IGNORE INTO metadata (key, value) VALUES (?, ?)', ('total_documents', 0))
+        
+        self.conn.commit()
 
-    def clean_text(self, text):
-        """Remove non-alphanumeric characters and convert to lowercase."""
-        text = re.sub(r'[^a-zA-Z0-9\s]', ' ', text)
-        return text.lower()
+    def add_page(self, url: str, html_content: str) -> None:
+        """
+        Processes a page, extracts tokens, and updates the inverted index.
+        
+        Args:
+            url: The URL of the page.
+            html_content: The raw HTML content of the page.
+        """
+        if self.conn is None:
+            logger.error("Database connection is not initialized.")
+            return
 
-    def tokenize(self, text):
-        """Tokenize text into words."""
-        return text.split()
-
-    def add_page(self, url, html_content):
-        """Extract text from HTML and add to the inverted index."""
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # Remove script and style elements
+        # Remove non-content elements
         for script in soup(["script", "style"]):
             script.extract()
             
-        # Get text, preserving some structure by replacing tags with spaces
         text = soup.get_text(separator=' ')
-        clean_text = self.clean_text(text)
-        words = self.tokenize(clean_text)
+        tokens = clean_and_tokenize(text)
         
-        # Aggregate word statistics for this page to minimize database hits
-        page_index = {}
-        for position, word in enumerate(words):
-            if word not in page_index:
-                page_index[word] = {'frequency': 0, 'positions': []}
-            page_index[word]['frequency'] += 1
-            page_index[word]['positions'].append(position)
-            
-        if self.conn is None:
+        if not tokens:
+            logger.warning(f"No valid tokens found for {url}")
             return
+
+        # Aggregate term frequency and positions for this document
+        page_stats: Dict[str, Dict] = {}
+        for pos, token in enumerate(tokens):
+            if token not in page_stats:
+                page_stats[token] = {'tf': 0, 'pos': []}
+            page_stats[token]['tf'] += 1
+            page_stats[token]['pos'].append(pos)
             
         cursor = self.conn.cursor()
         
-        # Get or create page_id
-        cursor.execute('INSERT OR IGNORE INTO pages (url) VALUES (?)', (url,))
+        # Insert page and update global document count
+        cursor.execute('INSERT OR IGNORE INTO pages (url, total_words) VALUES (?, ?)', (url, len(tokens)))
         cursor.execute('SELECT id FROM pages WHERE url = ?', (url,))
         page_id = cursor.fetchone()['id']
         
-        for word, stats in page_index.items():
-            # Get or create word_id
-            cursor.execute('INSERT OR IGNORE INTO words (word) VALUES (?)', (word,))
+        cursor.execute('UPDATE metadata SET value = value + 1 WHERE key = ?', ('total_documents',))
+        
+        # Index each term
+        for word, stats in page_stats.items():
+            # Insert word and increment Document Frequency (df)
+            cursor.execute('INSERT OR IGNORE INTO words (word, df) VALUES (?, ?)', (word, 0))
+            cursor.execute('UPDATE words SET df = df + 1 WHERE word = ?', (word,))
+            
             cursor.execute('SELECT id FROM words WHERE word = ?', (word,))
             word_id = cursor.fetchone()['id']
             
-            # Insert or replace occurrence
-            positions_str = ','.join(map(str, stats['positions']))
+            # Store occurrence details
+            pos_str = ','.join(map(str, stats['pos']))
             cursor.execute('''
                 INSERT OR REPLACE INTO occurrences (word_id, page_id, frequency, positions)
                 VALUES (?, ?, ?, ?)
-            ''', (word_id, page_id, stats['frequency'], positions_str))
+            ''', (word_id, page_id, stats['tf'], pos_str))
             
-        if self.conn:
-            self.conn.commit()
+        self.conn.commit()
+        logger.debug(f"Successfully indexed {url}")
 
-    def save_index(self, filepath):
-        """Save the inverted index (already handled by SQLite commit, but kept for compatibility)."""
-        # If the filepath is different from current db_path, we might need to copy it,
-        # but in this implementation, db_path is established at init/load.
-        pass
-
-    def load_index(self, filepath):
-        """Load the inverted index from a SQLite file."""
+    def load_index(self, filepath: str) -> bool:
+        """
+        Loads an existing index from the file system.
+        
+        Args:
+            filepath: Path to the SQLite file.
+            
+        Returns:
+            True if successful, False otherwise.
+        """
         if not os.path.exists(filepath):
             return False
             
@@ -126,7 +160,8 @@ class Indexer:
         self._initialize_db()
         return True
 
-    def close(self):
-        """Close the database connection."""
+    def close(self) -> None:
+        """Closes the active database connection."""
         if self.conn:
             self.conn.close()
+            logger.info("Database connection closed.")

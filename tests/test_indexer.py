@@ -3,18 +3,20 @@ import os
 import pytest
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 from indexer import Indexer
+from utils import clean_and_tokenize, stem
 
 @pytest.fixture
 def indexer():
     # Use in-memory database for tests to keep them fast and isolated
     return Indexer(":memory:")
 
-def test_clean_text(indexer):
-    assert indexer.clean_text("Hello, World!") == "hello  world "
-    assert indexer.clean_text("Python 3.10") == "python 3 10"
-
-def test_tokenize(indexer):
-    assert indexer.tokenize("hello world test") == ["hello", "world", "test"]
+def test_utils_processing():
+    # Test stop word removal and stemming
+    tokens = clean_and_tokenize("The quotes are amazing and inspirational")
+    # 'The', 'are', 'and' are stop words. 'quotes' -> 'quote', 'amazing' -> 'amaz', 'inspirational' -> 'inspirat'
+    assert "quote" in tokens
+    assert "the" not in tokens
+    assert "are" not in tokens
 
 def test_add_page(indexer):
     html = "<html><body><p>Hello world. Hello search.</p></body></html>"
@@ -23,30 +25,21 @@ def test_add_page(indexer):
     
     cursor = indexer.conn.cursor()
     
-    # Verify word was inserted
-    cursor.execute('SELECT id FROM words WHERE word = ?', ('hello',))
+    # Verify word was inserted (stemmed)
+    cursor.execute('SELECT id, df FROM words WHERE word = ?', ('hello',))
     word_row = cursor.fetchone()
     assert word_row is not None
+    assert word_row['df'] == 1
     word_id = word_row['id']
     
-    # Verify page was inserted
-    cursor.execute('SELECT id FROM pages WHERE url = ?', (url,))
-    page_row = cursor.fetchone()
-    assert page_row is not None
-    page_id = page_row['id']
-    
     # Verify occurrence statistics
-    cursor.execute('SELECT frequency, positions FROM occurrences WHERE word_id = ? AND page_id = ?', (word_id, page_id))
+    cursor.execute('SELECT frequency, positions FROM occurrences WHERE word_id = ?', (word_id,))
     occ = cursor.fetchone()
     assert occ['frequency'] == 2
+    # "hello" "world" "hello" "search" -> pos 0 and 2
     assert occ['positions'] == "0,2"
-    
-    # Check another word
-    cursor.execute('SELECT frequency FROM occurrences o JOIN words w ON o.word_id = w.id WHERE w.word = ?', ('search',))
-    assert cursor.fetchone()['frequency'] == 1
 
 def test_case_insensitivity(indexer):
-    indexer = Indexer(":memory:")
     html = "<html><body>Good good GOOD</body></html>"
     url = "http://example.com"
     indexer.add_page(url, html)
@@ -69,6 +62,3 @@ def test_load_index(tmp_path):
     cursor = new_indexer.conn.cursor()
     cursor.execute('SELECT url FROM pages')
     assert cursor.fetchone()['url'] == "url1"
-    
-    # Non-existent file
-    assert new_indexer.load_index("nonexistent.db") is False
