@@ -3,11 +3,11 @@
 ## Project Overview
 This project is a Python-based search engine tool designed to crawl the [Quotes to Scrape](https://quotes.toscrape.com/) website, build an inverted index of all words found on the pages, and provide a command-line interface (CLI) for searching.
 
-### Features
-- **Web Crawler**: Recursively crawls the target website while respecting a 6-second politeness window.
-- **Inverted Indexer**: Processes HTML content into an inverted index that stores word frequencies and positions.
-- **Search CLI**: Allows users to build, load, and query the index for single or multi-word search terms.
-- **Persistence**: Saves and loads the index to/from the file system as a SQLite database file (`.db`).
+- **Advanced Search Engine**: Implements **TF-IDF (Term Frequency-Inverse Document Frequency)** ranking for highly relevant search results.
+- **Linguistic Processing**: Includes **Stop Word removal** and **Basic Stemming** to optimize the index and improve recall.
+- **Advanced Query Syntax**: Supports strict inclusion (`+`) and exclusion (`-`) operators.
+- **Persistence**: Saves and loads the index to/from the file system as a professional SQLite database file (`.db`).
+- **Professional Engineering**: Features full type hints, Google-style docstrings, and a CI/CD pipeline.
 
 ## Installation & Setup
 
@@ -50,9 +50,13 @@ Prints the inverted index entry (URLs, frequency, positions) for a specific word
 ```
 
 ### 4. `find <query>`
-Finds all pages containing all words in the search query.
+Finds all pages matching the query, ranked by TF-IDF relevance.
+- `+word`: MUST be in the page.
+- `-word`: MUST NOT be in the page.
 ```
-> find good friends
+> find life
+> find +good +friends
+> find -indifference
 ```
 
 ### 5. `exit`
@@ -75,9 +79,17 @@ The tests cover:
 - **Search Logic**: Single and multi-word query intersection using SQL queries.
 - **CLI Logic**: Command handling, default paths, and custom index loading.
 
+### Advanced Analysis
+A benchmarking script is provided to analyze search performance:
+```bash
+python scripts/benchmark.py
+```
+
 ## Project Structure
-- `src/`: Source code (`crawler.py`, `indexer.py`, `search.py`, `main.py`)
-- `tests/`: Unit tests
+- `src/`: Source code (`crawler.py`, `indexer.py`, `search.py`, `main.py`, `utils.py`)
+- `tests/`: Unit tests (Crawler, Indexer, Search, CLI)
+- `scripts/`: Benchmarking and utility scripts
+- `.github/`: CI/CD workflows
 - `data/`: Directory for stored index files
 - `requirements.txt`: Project dependencies
 - `README.md`: Project documentation
