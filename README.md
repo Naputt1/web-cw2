@@ -7,7 +7,7 @@ This project is a Python-based search engine tool designed to crawl the [Quotes 
 - **Web Crawler**: Recursively crawls the target website while respecting a 6-second politeness window.
 - **Inverted Indexer**: Processes HTML content into an inverted index that stores word frequencies and positions.
 - **Search CLI**: Allows users to build, load, and query the index for single or multi-word search terms.
-- **Persistence**: Saves and loads the index to/from the file system as a JSON file.
+- **Persistence**: Saves and loads the index to/from the file system as a SQLite database file (`.db`).
 
 ## Installation & Setup
 
@@ -30,16 +30,17 @@ python src/main.py
 Once inside the CLI (`>`), you can use the following commands:
 
 ### 1. `build`
-Crawls the website, builds the index, and saves it to `data/index.json`.
+Crawls the website, builds the index, and saves it to `data/index.db`.
 **Note:** This command respects a 6-second delay between requests and may take several minutes to complete.
 ```
 > build
 ```
 
-### 2. `load`
-Loads a previously built index from the file system.
+### 2. `load [path]`
+Loads a previously built index from the file system. If no path is provided, it defaults to `data/index.db`.
 ```
 > load
+> load data/custom_index.db
 ```
 
 ### 3. `print <word>`
@@ -70,8 +71,9 @@ pytest
 
 The tests cover:
 - **Crawler**: Mocked network requests and URL validation.
-- **Indexer**: Text cleaning, tokenization, and index construction.
-- **Search Logic**: Single and multi-word query intersection.
+- **Indexer**: Text cleaning, tokenization, and SQLite index construction.
+- **Search Logic**: Single and multi-word query intersection using SQL queries.
+- **CLI Logic**: Command handling, default paths, and custom index loading.
 
 ## Project Structure
 - `src/`: Source code (`crawler.py`, `indexer.py`, `search.py`, `main.py`)

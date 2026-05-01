@@ -37,11 +37,14 @@ class SearchToolShell(cmd.Cmd):
         print(f"Index saved to {self.index_path}")
 
     def do_load(self, arg):
-        """Load the index from the file system."""
-        if self.indexer.load_index(self.index_path):
-            print(f"Index loaded successfully from {self.index_path}")
+        """Load the index from the file system. Usage: load [path]"""
+        path = arg.strip() if arg else self.index_path
+        
+        if self.indexer.load_index(path):
+            self.index_path = path  # Update current index path to the loaded one
+            print(f"Index loaded successfully from {path}")
         else:
-            print(f"Error: Index file not found at {self.index_path}. Run 'build' first.")
+            print(f"Error: Index file not found at {path}. Run 'build' first.")
 
     def do_print(self, arg):
         """Print the inverted index for a particular word. Usage: print <word>"""
