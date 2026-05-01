@@ -124,12 +124,9 @@ class SearchToolShell(cmd.Cmd):
             print(f"{'Rank':<5} {'Score':<8} {'URL'}")
             print("-" * 60)
             
-            # Display top 10 results
-            for i, (url, score) in enumerate(results[:10], 1):
+            for i, (url, score) in enumerate(results, 1):
                 print(f"{i:<5} {score:<8.3f} {url}")
             
-            if len(results) > 10:
-                print(f"... and {len(results) - 10} more results.")
             print("-" * 60)
 
     def do_exit(self, arg: str) -> bool:
