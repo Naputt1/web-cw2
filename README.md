@@ -73,6 +73,12 @@ The project includes a comprehensive test suite using `pytest`.
 pytest
 ```
 
+### Run Tests with Coverage
+To generate a code coverage report:
+```bash
+pytest --cov=src tests/
+```
+
 The tests cover:
 - **Crawler**: Mocked network requests and URL validation.
 - **Indexer**: Text cleaning, tokenization, and SQLite index construction.
