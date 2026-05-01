@@ -41,6 +41,31 @@ def test_find_minus_syntax(searcher):
     assert len(results) == 1
     assert results[0][0] == "url2"
 
+def test_find_contradictory_query(searcher):
+    # Same word marked as MUST and MUST NOT should return nothing
+    results = searcher.find("+hello -hello")
+    assert results == []
+
+def test_find_stop_words_only(searcher):
+    # Query with only stop words should not return results (they aren't indexed)
+    results = searcher.find("the and is")
+    assert results == []
+
+def test_find_mixed_syntax(searcher):
+    # MUST have hello, SHOULD have engine, MUST NOT have world
+    results = searcher.find("+hello engine -world")
+    assert len(results) == 1
+    assert results[0][0] == "url2"
+
+def test_find_case_insensitivity(searcher):
+    # Query case should not matter
+    results = searcher.find("HELLO")
+    assert len(results) == 2
+
+def test_find_empty_query(searcher):
+    assert searcher.find("") == []
+    assert searcher.find("   ") == []
+
 def test_find_no_results(searcher):
     results = searcher.find("missing")
     assert results == []
