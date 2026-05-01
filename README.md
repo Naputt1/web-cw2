@@ -8,8 +8,29 @@ This project is a Python-based search engine tool designed to crawl the [Quotes 
 - **Advanced Query Syntax**: Supports strict inclusion (`+`) and exclusion (`-`) operators.
 - **Persistence**: Saves and loads the index to/from the file system as a professional SQLite database file (`.db`).
 - **Professional Engineering**: Features full type hints, Google-style docstrings, and a CI/CD pipeline.
+- **System Architecture**: Optimized data flow from recursive crawling to SQLite persistence.
 
-## Installation & Setup
+## System Architecture
+
+The following diagram illustrates the data flow and component relationships within the Search Engine Tool:
+
+```mermaid
+graph TD
+    A[Web Crawler] -->|Raw HTML| B[Linguistic Processor]
+    B -->|Stemmed Tokens| C[Inverted Indexer]
+    C -->|SQL Inserts| D[(SQLite Database)]
+    E[Search CLI] -->|Query| F[Search Engine]
+    F -->|TF-IDF Scoring| D
+    D -->|Ranked Results| F
+    F -->|Display| E
+```
+
+### Component Roles
+- **Crawler**: Manages politeness and domain-restricted recursion.
+- **Utils**: Handles stop-word filtering and suffix-stripping (stemming).
+- **Indexer**: Manages the SQLite schema and calculates document frequencies.
+- **Search Engine**: Executes SQL-based intersections and TF-IDF relevance ranking.
+
 
 ### Prerequisites
 - Python 3.8 or higher
