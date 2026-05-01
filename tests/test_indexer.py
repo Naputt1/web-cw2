@@ -1,37 +1,57 @@
 import sys
 import os
+import pytest
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 from indexer import Indexer
 
-def test_clean_text():
-    indexer = Indexer()
+@pytest.fixture
+def indexer():
+    # Use in-memory database for tests to keep them fast and isolated
+    return Indexer(":memory:")
+
+def test_clean_text(indexer):
     assert indexer.clean_text("Hello, World!") == "hello  world "
     assert indexer.clean_text("Python 3.10") == "python 3 10"
 
-def test_tokenize():
-    indexer = Indexer()
+def test_tokenize(indexer):
     assert indexer.tokenize("hello world test") == ["hello", "world", "test"]
 
-def test_add_page():
-    indexer = Indexer()
+def test_add_page(indexer):
     html = "<html><body><p>Hello world. Hello search.</p></body></html>"
     url = "http://example.com"
     indexer.add_page(url, html)
     
-    assert "hello" in indexer.index
-    assert url in indexer.index["hello"]
-    assert indexer.index["hello"][url]["frequency"] == 2
-    assert indexer.index["hello"][url]["positions"] == [0, 2]
+    cursor = indexer.conn.cursor()
     
-    assert "world" in indexer.index
-    assert indexer.index["world"][url]["frequency"] == 1
-    assert indexer.index["world"][url]["positions"] == [1]
+    # Verify word was inserted
+    cursor.execute('SELECT id FROM words WHERE word = ?', ('hello',))
+    word_row = cursor.fetchone()
+    assert word_row is not None
+    word_id = word_row['id']
+    
+    # Verify page was inserted
+    cursor.execute('SELECT id FROM pages WHERE url = ?', (url,))
+    page_row = cursor.fetchone()
+    assert page_row is not None
+    page_id = page_row['id']
+    
+    # Verify occurrence statistics
+    cursor.execute('SELECT frequency, positions FROM occurrences WHERE word_id = ? AND page_id = ?', (word_id, page_id))
+    occ = cursor.fetchone()
+    assert occ['frequency'] == 2
+    assert occ['positions'] == "0,2"
+    
+    # Check another word
+    cursor.execute('SELECT frequency FROM occurrences o JOIN words w ON o.word_id = w.id WHERE w.word = ?', ('search',))
+    assert cursor.fetchone()['frequency'] == 1
 
-def test_case_insensitivity():
-    indexer = Indexer()
+def test_case_insensitivity(indexer):
+    indexer = Indexer(":memory:")
     html = "<html><body>Good good GOOD</body></html>"
     url = "http://example.com"
     indexer.add_page(url, html)
     
-    assert "good" in indexer.index
-    assert indexer.index["good"][url]["frequency"] == 3
+    cursor = indexer.conn.cursor()
+    cursor.execute('SELECT frequency FROM occurrences o JOIN words w ON o.word_id = w.id WHERE w.word = ?', ('good',))
+    row = cursor.fetchone()
+    assert row['frequency'] == 3

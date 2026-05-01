@@ -10,24 +10,33 @@ class SearchToolShell(cmd.Cmd):
     
     def __init__(self):
         super().__init__()
-        self.indexer = Indexer()
-        self.index_path = os.path.join('data', 'index.json')
+        # Use .db extension for SQLite
+        self.index_path = os.path.join('data', 'index.db')
+        self.indexer = Indexer(self.index_path)
         self.base_url = "https://quotes.toscrape.com/"
 
-    def do_build(self):
+    def do_build(self, arg):
         """Build the inverted index by crawling the website."""
         print(f"Starting build from {self.base_url}...")
         crawler = Crawler(self.base_url)
         pages = crawler.crawl()
         
         print(f"Crawling complete. Indexed {len(pages)} pages.")
+        
+        # Fresh build: remove existing database if it exists
+        if os.path.exists(self.index_path):
+            self.indexer.close()
+            os.remove(self.index_path)
+        
+        # Re-initialize indexer to create fresh tables
+        self.indexer = Indexer(self.index_path)
+        
         for page in pages:
             self.indexer.add_page(page['url'], page['content'])
             
-        self.indexer.save_index(self.index_path)
         print(f"Index saved to {self.index_path}")
 
-    def do_load(self):
+    def do_load(self, arg):
         """Load the index from the file system."""
         if self.indexer.load_index(self.index_path):
             print(f"Index loaded successfully from {self.index_path}")
@@ -40,7 +49,12 @@ class SearchToolShell(cmd.Cmd):
             print("Usage: print <word>")
             return
         
-        searcher = SearchEngine(self.indexer.index)
+        # Check if database exists
+        if not os.path.exists(self.index_path):
+            print(f"Error: Index file not found. Run 'build' first.")
+            return
+            
+        searcher = SearchEngine(self.index_path)
         print(searcher.print_word_info(arg))
 
     def do_find(self, arg):
@@ -49,7 +63,12 @@ class SearchToolShell(cmd.Cmd):
             print("Usage: find <query>")
             return
         
-        searcher = SearchEngine(self.indexer.index)
+        # Check if database exists
+        if not os.path.exists(self.index_path):
+            print(f"Error: Index file not found. Run 'build' first.")
+            return
+            
+        searcher = SearchEngine(self.index_path)
         results = searcher.find(arg)
         
         if not results:
@@ -59,13 +78,15 @@ class SearchToolShell(cmd.Cmd):
             for url in results:
                 print(f"  - {url}")
 
-    def do_exit(self):
+    def do_exit(self, arg):
         """Exit the search tool."""
+        self.indexer.close()
         print("Goodbye!")
         return True
 
-    def do_EOF(self):
+    def do_EOF(self, arg):
         """Exit on Ctrl-D."""
+        self.indexer.close()
         print("Goodbye!")
         return True
 
